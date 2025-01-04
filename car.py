@@ -1,6 +1,5 @@
 import pygame
 import numpy as np
-from scipy.interpolate import splprep, splev
 
 class Car:
     def __init__(self, start_x=None, start_y=None):
