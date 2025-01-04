@@ -10,14 +10,12 @@ import argparse
 from utils import Constants
 
 class TrackGeneration(Constants):
-    """
-    This class handles all logical/algorithmic aspects of track generation,
-    including random point generation, shaping the track, smoothing, etc.
-    """
 
     def __init__(self):
+        super().__init__()
         self.min_points = Constants.MIN_POINTS
         self.max_points = Constants.MAX_POINTS
+        self.track_width = Constants.TRACK_WIDTH
         self.margin = Constants.MARGIN
         self.min_distance = Constants.MIN_DISTANCE
         self.difficulty = Constants.DIFFICULTY
@@ -53,7 +51,6 @@ class TrackGeneration(Constants):
         Shapes the track by adding midpoints (with displacement),
         fixes angles, and pushes points apart.
         """
-        # Double the amount of points with displacement
         track_set = [[0, 0] for _ in range(len(track_points) * 2)]
         for i in range(len(track_points)):
             displacement = math.pow(rn.random(), self.difficulty) * self.max_displacement
@@ -66,12 +63,10 @@ class TrackGeneration(Constants):
                 (track_points[i][1] + track_points[(i + 1) % len(track_points)][1]) / 2 + disp[1]
             )
 
-        # refine shape
         for _ in range(3):
             track_set = self.fix_angles(track_set, self.max_angle)
             track_set = self.push_points_apart(track_set, self.distance_between_points)
 
-        # ensure points lie within margins
         final_set = []
         for point in track_set:
             if point[0] < self.margin:
@@ -83,12 +78,9 @@ class TrackGeneration(Constants):
             elif point[1] > (Constants.HEIGHT - self.margin):
                 point[1] = Constants.HEIGHT - self.margin
             final_set.append(point)
-        return final_set
+        return self._clamp_points(track_set)
 
     def get_corners_with_kerb(self, points):
-        """
-        Returns corner keypoints that require kerbs
-        """
         require_kerb = []
         for i in range(len(points)):
             prev_point = i - 1 if i > 0 else len(points) - 1
@@ -114,7 +106,6 @@ class TrackGeneration(Constants):
         """
         x = np.array([p[0] for p in track_points])
         y = np.array([p[1] for p in track_points])
-        # append starting point to make it periodic
         x = np.r_[x, x[0]]
         y = np.r_[y, y[0]]
 
@@ -131,7 +122,6 @@ class TrackGeneration(Constants):
         offset = Constants.FULL_CORNER_NUM_POINTS
         for corner in corners_in_track:
             i = track_points.index(corner)
-            # repeat track to easily fetch surrounding points
             tmp_track_points = track_points + track_points + track_points
             f_corner = tmp_track_points[i + len(track_points) - 1 - offset:
                                         i + len(track_points) - 1 + offset]
@@ -169,6 +159,7 @@ class TrackGeneration(Constants):
         vec = [rn.gauss(0, 1) for _ in range(dims)]
         mag = sum(x ** 2 for x in vec) ** 0.5
         return [x / mag for x in vec]
+
 
     def push_points_apart(self, points, distance):
         distance_sq = distance * distance
@@ -216,8 +207,16 @@ class TrackGeneration(Constants):
             points[next_point][1] = int(points[i][1] + new_y)
         return points
 
+    def _clamp_points(self, points):
+        final_set = []
+        for point in points:
+            clamped_x = max(self.margin, min(point[0], Constants.WIDTH - self.margin))
+            clamped_y = max(self.margin, min(point[1], Constants.HEIGHT - self.margin))
+            final_set.append([clamped_x, clamped_y])
+        return np.array(final_set)
 
-class TrackRenderer:
+
+class Render(Constants):
     """
     Handles all drawing functionality (points, lines, track, kerbs, etc.)
     """
@@ -280,7 +279,6 @@ class TrackRenderer:
         n_vec_p = [vec_p[0] / math.hypot(vec_p[0], vec_p[1]), 
                    vec_p[1] / math.hypot(vec_p[0], vec_p[1])]
         angle = math.degrees(math.atan2(n_vec_p[1], n_vec_p[0]))
-        # draw checkpoint
         checkpoint_surf = self._draw_rectangle((radius * 2, 5), Constants.BLUE, line_thickness=1, fill=False)
         rot_checkpoint = pygame.transform.rotate(checkpoint_surf, -angle)
 
@@ -309,13 +307,11 @@ class TrackRenderer:
             temp_corner = corner + corner
             last_kerb = None
             for i in range(0, len(corner), step):
-                # parallel vector
                 vec_p = [temp_corner[i + offset][0] - temp_corner[i][0],
                          temp_corner[i + offset][1] - temp_corner[i][1]]
                 n_vec_p = [vec_p[0] / math.hypot(vec_p[0], vec_p[1]),
                            vec_p[1] / math.hypot(vec_p[0], vec_p[1])]
 
-                # perpendicular vector
                 vec_perp = [temp_corner[i + offset][1] - temp_corner[i][1],
                             -(temp_corner[i + offset][0] - temp_corner[i][0])]
                 n_vec_perp = [vec_perp[0] / math.hypot(vec_perp[0], vec_perp[1]),
@@ -325,7 +321,6 @@ class TrackRenderer:
                 kerb = self._draw_single_kerb()
                 rot_kerb = pygame.transform.rotate(kerb, -angle)
 
-                # Decide direction
                 m_x, m_y = 1, 1
                 if angle > 180:
                     m_x = -1
@@ -337,7 +332,6 @@ class TrackRenderer:
                 if last_kerb is None:
                     last_kerb = start_pos
                 else:
-                    # space kerbs at least 'track_width' apart
                     if math.hypot(start_pos[0] - last_kerb[0], start_pos[1] - last_kerb[1]) >= track_width:
                         continue
                 last_kerb = start_pos
@@ -362,66 +356,63 @@ class TrackRenderer:
         return starting_grid
 
 
-class RacetrackGame:
+class RacetrackGame(Constants):
     """
     Main class responsible for initializing Pygame and orchestrating the
     generation and drawing of the procedural racetrack.
     """
-
     def __init__(self, debug=True, show_checkpoints=True):
+        super().__init__()
         pygame.init()
         self.screen = pygame.display.set_mode((Constants.WIDTH, Constants.HEIGHT))
         self.debug = debug
+        self.smoothed_track = []
         self.show_checkpoints = show_checkpoints
         self.track_generation = TrackGeneration()
-        self.track_renderer = TrackRenderer()
+        self.track_renderer = Render()
         pygame.display.set_caption(Constants.TITLE)
 
     def run(self):
-        # Fill background
         self.screen.fill(Constants.GRASS_GREEN)
 
-        # 1. Generate track data
         points = self.track_generation.random_points()
         hull = ConvexHull(points)
         track_points = self.track_generation.get_track_points(hull, points)
         shaped_track = self.track_generation.shape_track(track_points)
         corner_points = self.track_generation.get_corners_with_kerb(shaped_track)
-        smoothed_track = self.track_generation.smooth_track(shaped_track)
-        full_corners = self.track_generation.get_full_corners(smoothed_track, corner_points)
-        checkpoints = self.track_generation.get_checkpoints(smoothed_track)
+        self.smoothed_track = self.track_generation.smooth_track(shaped_track)
+        full_corners = self.track_generation.get_full_corners(self.smoothed_track, corner_points)
+        checkpoints = self.track_generation.get_checkpoints(self.smoothed_track)
 
-        # 2. Draw the track
-        self.track_renderer.draw_track(self.screen, Constants.GREY, smoothed_track, full_corners)
+        self.track_renderer.draw_track(self.screen, Constants.GREY, self.smoothed_track, full_corners)
 
-        # 3. Optionally draw checkpoints
         if self.show_checkpoints or self.debug:
             for ch in checkpoints:
-                self.track_renderer.draw_checkpoint(self.screen, smoothed_track, ch, self.debug)
+                self.track_renderer.draw_checkpoint(self.screen, self.smoothed_track, ch, self.debug)
 
-        # 4. Debug draws
         if self.debug:
-            # Original random points
             self.track_renderer.draw_points(self.screen, Constants.WHITE, points)
             self.track_renderer.draw_convex_hull(hull, self.screen, points, Constants.RED)
 
-            # Shaped track points and lines
             self.track_renderer.draw_points(self.screen, Constants.BLUE, shaped_track)
             self.track_renderer.draw_lines_from_points(self.screen, Constants.BLUE, shaped_track)
 
-            # Final (smoothed) track points
-            self.track_renderer.draw_points(self.screen, Constants.BLACK, smoothed_track)
+            self.track_renderer.draw_points(self.screen, Constants.BLACK, self.smoothed_track)
 
-        # Update display
         pygame.display.update()
 
-        # Main loop
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
             pygame.display.update()
+
+    def is_on_track(self, x, y):
+        for point in self.smoothed_track:
+            if np.sqrt((x - point[0])**2 + (y - point[1])**2) < self.track_game.track_generation.track_width:
+                return True
+        return False
 
 
 def str2bool(v):

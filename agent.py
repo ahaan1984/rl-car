@@ -7,6 +7,7 @@ import random
 
 class Network(nn.Module):
     def __init__(self, input_size, output_size):
+        super().__init__()
         self.fc1 = nn.Linear(input_size, 64)
         self.fc2 = nn.Linear(64, 128)
         self.fc3 = nn.Linear(128, 128)
@@ -23,6 +24,7 @@ class Network(nn.Module):
 
 class Agent(nn.Module):
     def __init__(self, state_size, action_size):
+        super().__init__()
         self.state_size = state_size
         self.action_size = action_size
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -33,6 +35,7 @@ class Agent(nn.Module):
         self.epsilon = 1.0
         self.epsilon_min = 0.01
         self.epsilon_max = 0.96
+        self.epsilon_decay = 0.995
         self.learning_rate = 3e-4
         self.batch_size = 32
         self.update_target_frequency = 100
@@ -41,7 +44,7 @@ class Agent(nn.Module):
         self.target_net = Network(state_size, action_size).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         
-        self.optimiser = optim.AdamW(self.policy_net.state_dict())
+        self.optimiser = optim.AdamW(self.policy_net.parameters())
         self.steps = 0
 
     def remember(self, state, action, reward, next_state, done):
@@ -61,6 +64,7 @@ class Agent(nn.Module):
             return 
 
         minibatch = random.sample(self.memory, self.batch_size)
+        states, actions, rewards, next_states, dones = zip(*minibatch)
 
         # batch data
         states = torch.Tensor(np.array([transition[0] for transition in minibatch], dtype=np.float32)).to(self.device)
@@ -76,7 +80,7 @@ class Agent(nn.Module):
             target_q_values = rewards + (1 - dones) * self.gamma * next_q_values
 
         loss = nn.HuberLoss()(current_q_values.squeeze(), target_q_values)
-        self.optimiser.zero_grad(set_to_None=True)
+        self.optimiser.zero_grad(set_to_none=True)
         loss.backward()
         self.optimiser.step()
 
@@ -87,11 +91,14 @@ class Agent(nn.Module):
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
+    def update_target_network(self):
+            self.target_net.load_state_dict(self.policy_net.state_dict())
+
     def save(self, filename):
         torch.save({
             'policy_net_state_dict': self.policy_net.state_dict(),
             'target_net_state_dict': self.target_net.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
+            'optimizer_state_dict': self.optimiser.state_dict(),
             'epsilon': self.epsilon
         }, filename)
     
