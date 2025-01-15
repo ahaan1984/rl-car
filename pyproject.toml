@@ -10,3 +10,7 @@ dependencies = [
     "scipy>=1.14.1",
     "torch>=2.5.1",
 ]
+
+[tool.ruff.lint]
+select = ["ALL"]
+
