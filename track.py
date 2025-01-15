@@ -40,17 +40,9 @@ class TrackGeneration(Constants):
         return np.array(points)
 
     def get_track_points(self, hull, points):
-        """
-        Get the original points from the random set that will be used
-        as the track's starting shape
-        """
         return np.array([points[hull.vertices[i]] for i in range(len(hull.vertices))])
 
     def shape_track(self, track_points):
-        """
-        Shapes the track by adding midpoints (with displacement),
-        fixes angles, and pushes points apart.
-        """
         track_set = [[0, 0] for _ in range(len(track_points) * 2)]
         for i in range(len(track_points)):
             displacement = math.pow(rn.random(), self.difficulty) * self.max_displacement
@@ -101,9 +93,6 @@ class TrackGeneration(Constants):
         return require_kerb
 
     def smooth_track(self, track_points):
-        """
-        Smooth the track points using periodic splines
-        """
         x = np.array([p[0] for p in track_points])
         y = np.array([p[1] for p in track_points])
         x = np.r_[x, x[0]]
@@ -114,9 +103,6 @@ class TrackGeneration(Constants):
         return [(int(xi[i]), int(yi[i])) for i in range(len(xi))]
 
     def get_full_corners(self, track_points, corners):
-        """
-        For each corner keypoint, get a range of points from the smoothed track
-        """
         corners_in_track = self.get_corners_from_kp(track_points, corners)
         f_corners = []
         offset = Constants.FULL_CORNER_NUM_POINTS
@@ -142,9 +128,6 @@ class TrackGeneration(Constants):
         return closest_point
 
     def get_checkpoints(self, track_points, n_checkpoints=Constants.N_CHECKPOINTS):
-        """
-        Returns equally spaced checkpoints from the track
-        """
         checkpoint_step = len(track_points) // n_checkpoints
         checkpoints = []
         for i in range(n_checkpoints):
@@ -217,9 +200,7 @@ class TrackGeneration(Constants):
 
 
 class Render(Constants):
-    """
-    Handles all drawing functionality (points, lines, track, kerbs, etc.)
-    """
+
 
     def draw_points(self, surface, color, points):
         for p in points:
@@ -244,9 +225,7 @@ class Render(Constants):
         pygame.draw.line(surface, color, init, end)
 
     def draw_track(self, surface, color, points, corners):
-        """
-        Draws the actual track (road, kerbs, starting grid).
-        """
+
         radius = Constants.TRACK_WIDTH // 2
         self._draw_corner_kerbs(surface, corners, radius)
 
@@ -258,7 +237,6 @@ class Render(Constants):
             surface.blit(track_chunk, blit_pos)
 
         starting_grid = self._draw_starting_grid(radius * 2)
-        # rotate and place starting grid
         offset = Constants.TRACK_POINT_ANGLE_OFFSET
         vec_p = [points[offset][1] - points[0][1], -(points[offset][0] - points[0][0])]
         n_vec_p = [vec_p[0] / math.hypot(vec_p[0], vec_p[1]), 

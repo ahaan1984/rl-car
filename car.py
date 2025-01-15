@@ -14,11 +14,11 @@ class Car:
         self.acceleration = 0
         self.steering = 0
         self.sensor_readings = np.zeros(self.NUM_SENSORS + 2)
-        self.min_speed = -1
-        self.max_speed = 40
-        self.steering_factor = 8
+        self.min_speed = -2
+        self.max_speed = 20
+        self.steering_factor = 4
         self.friction = 0.1
-        self.acceleration_factor = 0.5
+        self.acceleration_factor = 4
         
         self.surface = pygame.Surface((self.CAR_LENGTH, self.CAR_WIDTH), pygame.SRCALPHA)
         pygame.draw.rect(self.surface, (255, 0, 0), (0, 0, self.CAR_LENGTH, self.CAR_WIDTH))
@@ -31,12 +31,14 @@ class Car:
             
         self.speed = np.clip(self.speed, self.min_speed, self.max_speed)
         
-        # Add minimum speed threshold for steering
-        min_speed_for_steering = 0.5
+        min_speed_for_steering = 0.1
         speed_factor = abs(self.speed) / self.max_speed if abs(self.speed) > min_speed_for_steering else 0
         effective_steering = self.steering * self.steering_factor * speed_factor
         
         self.angle += effective_steering
+
+        self.x += np.cos(np.radians(self.angle)) * self.speed
+        self.y += np.sin(np.radians(self.angle)) * self.speed
 
     def draw(self, screen):
         rotated_surface = pygame.transform.rotate(self.surface, -self.angle)

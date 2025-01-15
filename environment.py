@@ -82,8 +82,10 @@ class Environment:
             self.car.steering = 0
         elif action == 3:  # Steer left
             self.car.steering = 1
+            self.car.acceleration = 0.5
         elif action == 4:  # Steer right
             self.car.steering = -1
+            self.car.acceleration = 0.5
             
         self.car.move()
         
@@ -91,12 +93,15 @@ class Environment:
         done = False
         
         if not self.is_on_track(self.car.x, self.car.y):
-            reward = -100
+            reward = -10
             done = True
         else:
             current_distance = self.calculate_progress()
             distance_reward = current_distance - self.prev_distance
-            reward += distance_reward * 10
+            reward += distance_reward * 20
+
+            speed_reward = abs(self.car.speed) * 0.05
+            reward += speed_reward
             
             reward -= 0.1
             

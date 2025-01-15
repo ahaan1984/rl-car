@@ -13,7 +13,7 @@ class Network(nn.Module):
         self.fc3 = nn.Linear(128, 128)
         self.fc4 = nn.Linear(128, 64)
         self.fc5 = nn.Linear(64, output_size)
-        self.act = nn.GELU()
+        self.act = nn.ReLU()
 
     def forward(self, x):
         x = self.act(self.fc1(x))
@@ -33,11 +33,11 @@ class Agent(nn.Module):
         self.memory = deque(maxlen=1000)
         self.gamma = 0.95
         self.epsilon = 1.0
-        self.epsilon_min = 0.01
+        self.epsilon_min = 0.1
         self.epsilon_max = 0.96
-        self.epsilon_decay = 0.995
-        self.learning_rate = 3e-4
-        self.batch_size = 32
+        self.epsilon_decay = 0.999
+        self.learning_rate = 1e-3
+        self.batch_size = 64
         self.update_target_frequency = 100
 
         self.policy_net = Network(state_size, action_size).to(self.device)
