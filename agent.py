@@ -11,17 +11,15 @@ class Network(nn.Module):
         super().__init__()
         self.fc1 = nn.Linear(input_size, 64)
         self.fc2 = nn.Linear(64, 128)
-        self.fc3 = nn.Linear(128, 128)
-        self.fc4 = nn.Linear(128, 64)
-        self.fc5 = nn.Linear(64, output_size)
+        self.fc3 = nn.Linear(128, 64)
+        self.fc4 = nn.Linear(64, output_size)
         self.act = nn.GELU()
-
+    
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.act(self.fc1(x))
         x = self.act(self.fc2(x))
         x = self.act(self.fc3(x))
-        x = self.act(self.fc4(x))
-        return self.fc5(x)
+        return self.fc4(x)
 
 class Agent(nn.Module):
     def __init__(self, state_size:int, action_size:int) -> None:
@@ -35,8 +33,8 @@ class Agent(nn.Module):
         self.epsilon = 1.0
         self.epsilon_min = 0.1
         self.epsilon_max = 0.96
-        self.epsilon_decay = 0.995
-        self.learning_rate = 1e-3
+        self.epsilon_decay = 0.999
+        self.learning_rate = 3e-4
         self.batch_size = 64
         self.update_target_frequency = 100
 
@@ -47,7 +45,7 @@ class Agent(nn.Module):
         self.target_net = Network(state_size, action_size).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
-        self.optimiser = optim.AdamW(self.policy_net.parameters())
+        self.optimiser = optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate)
         self.steps = 0
 
     def remember(self, state, action, reward, next_state, done) -> deque:
@@ -86,8 +84,10 @@ class Agent(nn.Module):
         current_q_values = self.policy_net(states).gather(1, actions.unsqueeze(1))
 
         with torch.no_grad():
-            next_q_values = self.target_net(next_states).max(1)[0]
-            target_q_values = rewards + (1 - dones) * self.gamma * next_q_values
+            next_q_values = self.policy_net(next_states).argmax(1)
+            next_q_values = self.target_net(next_states).gather(1, next_q_values.unsqueeze(1))
+    
+        target_q_values = rewards + (1 - dones) * self.gamma * next_q_values.squeeze()
 
         loss = nn.MSELoss()(current_q_values.squeeze(), target_q_values)
         self.optimiser.zero_grad(set_to_none=True)
@@ -101,20 +101,15 @@ class Agent(nn.Module):
         if len(self.recent_rewards) >= 100:
             current_avg_reward = sum(self.recent_rewards) / len(self.recent_rewards)
 
-            # If baseline not set or performing significantly better, update baseline
             if self.baseline_reward is None or current_avg_reward > self.baseline_reward * 1.2:
                 self.baseline_reward = current_avg_reward
 
-            # Calculate performance ratio
             performance_ratio = current_avg_reward / (self.baseline_reward + 1e-10)
 
-            # Adjust epsilon based on performance
-            if performance_ratio < 0.8:  # Performing poorly
-                # Increase exploration
+            if performance_ratio < 0.8:
                 self.epsilon = min(self.epsilon_max, 
                                  self.epsilon / self.epsilon_decay)
-            else:  # Performing well
-                # Decrease exploration gradually
+            else:
                 self.epsilon = max(self.epsilon_min,
                                  self.epsilon * self.epsilon_decay)
 
@@ -126,8 +121,8 @@ class Agent(nn.Module):
             "policy_net_state_dict": self.policy_net.state_dict(),
             "target_net_state_dict": self.target_net.state_dict(),
             "optimizer_state_dict": self.optimiser.state_dict(),
-            "epsilon": self.epsilon
-        }, filename)
+            "epsilon": self.epsilon},
+            filename)
 
     def load(self, filename:str) -> None:
         checkpoint = torch.load(filename)

@@ -76,29 +76,18 @@ class TrackGeneration(Constants):
             elif point[1] > (self.height - self.margin):
                 point[1] = self.height - self.margin
             final_set.append(point)
+
         return self._clamp_points(track_set)
 
     def get_corners_with_kerb(self, points):
-        require_kerb = []
-        for i in range(len(points)):
-            prev_point = i - 1 if i > 0 else len(points) - 1
-            next_point = (i + 1) % len(points)
-            px = points[prev_point][0] - points[i][0]
-            py = points[prev_point][1] - points[i][1]
-            pl = math.sqrt(px * px + py * py)
-            px /= pl
-            py /= pl
-            nx = points[next_point][0] - points[i][0]
-            ny = points[next_point][1] - points[i][1]
-            nl = math.sqrt(nx * nx + ny * ny)
-            nx /= nl
-            ny /= nl
-            a = math.atan(px * ny - py * nx)
-            if (self.min_kerb_angle <= abs(math.degrees(a)) <= self.max_kerb_angle):
-                require_kerb.append(points[i])
-        return np.array(require_kerb)
+        points_array = np.array(points)
+        vectors = np.roll(points_array, -1, axis=0) - points_array
+        angles = np.arctan2(vectors[:, 1], vectors[:, 0])
+        angle_diffs = np.abs(np.degrees(angles - np.roll(angles, 1)))
+        mask = (self.min_kerb_angle <= angle_diffs) & (angle_diffs <= self.max_kerb_angle)
+        return points_array[mask]
 
-    def smooth_track(self, track_points):
+    def smooth_track(self, track_points:np.ndarray) -> list:
         x = np.array([p[0] for p in track_points])
         y = np.array([p[1] for p in track_points])
         x = np.r_[x, x[0]]
@@ -359,7 +348,8 @@ class RacetrackGame(Constants):
     def __init__(self, debug=True, show_checkpoints=True):
         super().__init__()
         pygame.init()
-        self.screen = pygame.display.set_mode((Constants.WIDTH, Constants.HEIGHT))
+        self.screen = pygame.display.set_mode((Constants.WIDTH, Constants.HEIGHT), 
+        pygame.DOUBLEBUF | pygame.HWSURFACE)
         self.debug = debug
         self.smoothed_track = []
         self.show_checkpoints = show_checkpoints
@@ -402,6 +392,42 @@ class RacetrackGame(Constants):
                     pygame.quit()
                     sys.exit()
             pygame.display.update()
+
+    def raycast_collision(self, start: tuple, end: tuple) -> tuple | None:
+        """
+        Cast a ray from `start` to `end` and check for collisions with the track.
+        Returns the closest collision point or None if no collision.
+        """
+        sx, sy = start
+        ex, ey = end
+
+        min_dist = float("inf")
+        closest_point = None
+
+        for point in self.smoothed_track:
+            px, py = point
+            dx = ex - sx
+            dy = ey - sy
+            dp = (px - sx, py - sy)
+
+            cross = dx * (py - sy) - dy * (px - sx)
+            if abs(cross) > 1e-8:
+                continue
+
+            t = (dp[0] * dx + dp[1] * dy) / (dx**2 + dy**2)
+            if t < 0 or t > 1:
+                continue
+
+            proj_x = sx + t * dx
+            proj_y = sy + t * dy
+
+            dist = np.sqrt((proj_x - px)**2 + (proj_y - py)**2)
+            if dist < min_dist:
+                min_dist = dist
+                closest_point = (proj_x, proj_y)
+        if closest_point is not None and min_dist < self.track_generation.track_width:
+            return closest_point
+        return None
 
     def is_on_track(self, x, y):
         if not (0 <= x <= Constants.WIDTH and 0 <= y <= Constants.HEIGHT):

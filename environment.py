@@ -71,41 +71,48 @@ class Environment:
         else:
             self.car.x = self.smoothed_track[0][0]
             self.car.y = self.smoothed_track[0][1]
-            self.car.angle = 0
-            self.car.speed = 0
-            self.car.acceleration = 0
-            self.car.steering = 0
+
+        initial_angle = self.calculate_initial_angle()
+        self.car.angle = initial_angle
+
+        self.car.speed = 0
+        self.car.acceleration = 0
+        self.car.steering = 0
+        self.car.angular_velocity = 0
+        self.car.tilt_angle = 0
 
         self.prev_distance = 0
         self.steps_since_progress = 0
+
         return self.get_state()
 
     def get_state(self) -> np.ndarray:
         sensor_readings = self.car.get_sensors(self.track_game)
 
+        angle_rad = np.radians(self.car.angle)
+        trig_values = np.array([np.sin(angle_rad), np.cos(angle_rad)])
+
         state = np.concatenate([
             sensor_readings,
             [self.car.speed / self.car.max_speed],
-            [np.sin(np.radians(self.car.angle))],
-            [np.cos(np.radians(self.car.angle))]
-        ], dtype=np.float32)
+            trig_values]).astype(np.float32)
+
         return state
 
     def is_on_track(self, x, y):
-        for point in self.smoothed_track:
-            if np.sqrt((x - point[0])**2 + (y - point[1])**2) < (self.track_generation.track_width - self.track_margin):
-                return True
-        return False
+        track_points = np.array(self.smoothed_track)
+
+        distances = np.sqrt(np.sum((track_points - np.array([x, y]))**2, axis=1))
+
+        return np.any(distances < (self.track_generation.track_width - self.track_margin))
 
     def step(self, action: int):
         prev_x, prev_y = self.car.x, self.car.y
-        # Apply steering and acceleration based on action
         self.car.steering = self.steering_angles[action]
         self.car.acceleration = self.acceleration_factors[action]
 
         went_off_track = self.car.move(self)
 
-        # Modified reward structure for granular steering
         reward = 0
         done = False
 
@@ -118,35 +125,34 @@ class Environment:
             distance_reward = current_distance - self.prev_distance
 
             if distance_reward > 0:
-                # Base progress reward
                 reward += distance_reward * 20
                 self.steps_since_progress = 0
 
-                # Additional reward for smooth turning
-                if 3 <= action <= 8:  # Turning actions
+                if 3 <= action <= 8:
                     turn_efficiency = 1.0
-                    # Reward more for appropriate speed during turns
                     speed_ratio = self.car.speed / self.car.max_speed
-                    if 0.2 <= speed_ratio <= 0.6:  # Sweet spot for turning
+                    if 0.2 <= speed_ratio <= 0.6:
                         turn_efficiency *= 1.5
-                    # Reward more for using appropriate turn angle
-                    if abs(self.car.angular_velocity) > 0.1:  # Actually turning
-                        if action in [3, 6]:  # Gentle turns
+                    if abs(self.car.angular_velocity) > 0.1:
+                        if action in [3, 6]:
                             turn_efficiency *= 1.2 if speed_ratio > 0.5 else 0.8
-                        elif action in [4, 7]:  # Medium turns
+                        elif action in [4, 7]:
                             turn_efficiency *= 1.2 if 0.3 <= speed_ratio <= 0.5 else 0.8
-                        elif action in [5, 8]:  # Sharp turns
+                        elif action in [5, 8]:
                             turn_efficiency *= 1.2 if speed_ratio < 0.3 else 0.8
                     reward *= turn_efficiency
             else:
                 self.steps_since_progress += 1
                 reward -= 0.5
+\
+                if action in [3, 6]:
+                    reward += 0.1
 
-                # Less severe penalty for slight course corrections
-                if action in [3, 6]:  # Gentle turns
-                    reward += 0.1  # Encourage exploration of minor adjustments
+            if abs(self.car.angular_velocity) < 0.1:
+                reward += 0.5
+                if self.car.speed > 0.8 * self.car.max_speed:
+                    reward += 0.2
 
-            # Add small incentive for maintaining speed during straight sections
             if action in [0, 1] and abs(self.car.angular_velocity) < 0.1:
                 reward += self.car.speed * 0.05
 
@@ -167,6 +173,17 @@ class Environment:
             distance = np.sqrt((self.car.x - point[0])**2 + (self.car.y - point[1])**2)
             min_distance = min(min_distance, distance)
         return -min_distance
+
+    def calculate_initial_angle(self) -> float:
+        start_point = np.array(self.smoothed_track[0])
+        next_point = np.array(self.smoothed_track[1])
+
+        direction = next_point - start_point
+
+        angle = np.arctan2(direction[1], direction[0])
+        angle_degrees = np.degrees(angle)
+
+        return angle_degrees
 
     def render(self) -> None:
         self.screen.fill((100, 200, 100))

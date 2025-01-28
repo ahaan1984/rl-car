@@ -22,13 +22,11 @@ def train_agent():
             action = agent.act(state)
             next_state, reward, done = env.step(action)
 
-            if action in [3, 4]:  # Turning actions
+            if action in [3, 4]: 
                 if env.car.speed < env.car.max_speed * 0.15:  # Reduced speed threshold
-                    reward -= 0.05  # Reduced penalty
-                # Add positive reward for successful turns
+                    reward -= 0.05
                 if abs(env.car.angular_velocity) > 0.5:
                     reward += 0.1
-            # Additional reward for maintaining moderate speed during turns
             if abs(env.car.angular_velocity) > 0.5 and env.car.speed > env.car.max_speed * 0.3:
                 reward += 0.15
 

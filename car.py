@@ -11,6 +11,9 @@ class Car:
         self.x = start_x
         self.y = start_y
         self.angle = 0
+        self.initial_angle = 0
+        self.angle_offset = 0
+
         self.speed = 0
         self.acceleration = 0
         self.steering = 0
@@ -25,7 +28,7 @@ class Car:
         self.steering_response = 0.4
         self.max_angular_velocity = 5.0
         self.steering_speed_factor = 0.3
- 
+
         self.turn_precision = 0.05
         self.steering_deadzone = 0.02
 
@@ -45,7 +48,7 @@ class Car:
 
         base_friction = self.friction
         if abs(self.steering) > 0:
- 
+
             turn_friction = base_friction * (1 + abs(self.steering) * 0.5)
             self.speed *= (1 - turn_friction)
         else:
@@ -63,7 +66,7 @@ class Car:
                 steering_multiplier = 0.8
             elif steering_power < 0.7:
                 steering_multiplier = 1.0
-            else:  # Sharp turns
+            else:
                 steering_multiplier = 1.2
 
             target_angular_velocity = (self.steering *
@@ -73,7 +76,7 @@ class Car:
 
             angular_diff = target_angular_velocity - self.angular_velocity
             self.angular_velocity += angular_diff * self.steering_response
-            self.angular_velocity = np.clip(self.angular_velocity, 
+            self.angular_velocity = np.clip(self.angular_velocity,
                                           -self.max_angular_velocity,
                                           self.max_angular_velocity)
         else:
@@ -87,6 +90,9 @@ class Car:
 
         new_x = self.x + np.cos(np.radians(new_angle)) * self.speed
         new_y = self.y + np.sin(np.radians(new_angle)) * self.speed
+
+        if abs(self.steering) > 0.8:
+            self.speed = max(self.speed * 0.8, 0)
 
         if environment.is_on_track(new_x, new_y):
             self.angle = new_angle
@@ -130,13 +136,14 @@ class Car:
                 sensor_x = self.x
                 sensor_y = self.y
 
-                for distance in range(self.SENSOR_RANGE):
-                    sensor_x += np.cos(np.radians(sensor_angle))
-                    sensor_y += np.sin(np.radians(sensor_angle))
+                end_x = self.x + np.cos(np.radians(sensor_angle)) * self.SENSOR_RANGE
+                end_y = self.y + np.sin(np.radians(sensor_angle)) * self.SENSOR_RANGE
 
-                    if not track.is_on_track(sensor_x, sensor_y):
-                        self.sensor_readings[i] = distance / self.SENSOR_RANGE
-                        break
+                # Check for collision along the ray
+                collision = track.raycast_collision((self.x, self.y), (end_x, end_y))
+                if collision:
+                    distance = np.sqrt((collision[0] - self.x)**2 + (collision[1] - self.y)**2)
+                    self.sensor_readings[i] = distance / self.SENSOR_RANGE
                 else:
                     self.sensor_readings[i] = 1.0
 
