@@ -22,12 +22,13 @@ def train_agent():
             action = agent.act(state)
             next_state, reward, done = env.step(action)
 
-            if action in [3, 4]: 
-                if env.car.speed < env.car.max_speed * 0.15:  # Reduced speed threshold
+            if action in [1, 2]:
+                if env.car.speed < env.car.max_speed * 0.2:
                     reward -= 0.05
-                if abs(env.car.angular_velocity) > 0.5:
+                if abs(env.car.angular_velocity) > 0.3:
                     reward += 0.1
-            if abs(env.car.angular_velocity) > 0.5 and env.car.speed > env.car.max_speed * 0.3:
+
+            if action == 3 and env.car.speed > env.car.max_speed * 0.8:
                 reward += 0.15
 
             agent.remember(state, action, reward, next_state, done)
@@ -39,10 +40,10 @@ def train_agent():
 
         if episode % target_update_frequency == 0:
             agent.update_target_network()
-  
+
         # if episode % 100 == 0:
         #     agent.save(f"dqn_agent_episode_{episode}.pth")
-            
+
         rewards_history.append(total_reward)
 
         print(f"Episode: {episode + 1}/{episodes}")

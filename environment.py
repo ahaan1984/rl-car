@@ -23,35 +23,41 @@ class Environment:
 
         self.track_points = None
 
-        self.num_actions = 9
+        self.num_actions = 5
         self.steering_angles = {
             0: 0,      # No steering
-            1: 1,      # Full acceleration
-            2: -1,     # Full brake
-            3: 0.25,   # Slight right + some acceleration
-            4: 0.5,    # Medium right + some acceleration
-            5: 1.0,    # Sharp right + minimal acceleration
-            6: -0.25,  # Slight left + some acceleration
-            7: -0.5,   # Medium left + some acceleration
-            8: -1.0    # Sharp left + minimal acceleration
+            1: 0.5,    # Medium right + acceleration
+            2: -0.5,   # Medium left + acceleration
+            3: 1.0,    # Full acceleration
+            4: -1.0,   # Full brake
         }
 
         self.acceleration_factors = {
-            0: 0,    # No acceleration
-            1: 1.0,  # Full acceleration
-            2: -1.0, # Full brake
-            3: 0.4,  # More acceleration for gentle turns
-            4: 0.3,  # Moderate acceleration for medium turns
-            5: 0.2,  # Minimal acceleration for sharp turns
-            6: 0.4,  # Mirror of right turns
-            7: 0.3,
-            8: 0.2
+            0: 0,      # No acceleration
+            1: 0.3,    # Medium acceleration for right turn
+            2: 0.3,    # Medium acceleration for left turn
+            3: 1.0,    # Full acceleration
+            4: -1.0,   # Full brake
         }
 
         self.prev_distance = 0
         self.steps_since_progress = 0
         self.max_steps_without_progress = 100
         self.track_margin = 5
+
+    def calculate_initial_curvature(self) -> float:
+        if len(self.smoothed_track) < 3:
+            return 0.0
+
+        p1 = np.array(self.smoothed_track[0])
+        p2 = np.array(self.smoothed_track[1])
+        p3 = np.array(self.smoothed_track[2])
+
+        v1 = p2 - p1
+        v2 = p3 - p2
+
+        angle = np.arctan2(np.cross(v1, v2), np.dot(v1, v2))
+        return angle
 
     def generate_track(self) -> None:
         self.screen.fill((100, 200, 100))
@@ -73,18 +79,20 @@ class Environment:
             self.car.y = self.smoothed_track[0][1]
 
         initial_angle = self.calculate_initial_angle()
-        self.car.angle = initial_angle
+        initial_curvature = self.calculate_initial_curvature()
 
+        self.car.angle = initial_angle
+        self.car.tilt_angle = 0
+        self.car.steering = np.clip(initial_curvature / np.pi, -1, 1)
         self.car.speed = 0
         self.car.acceleration = 0
-        self.car.steering = 0
         self.car.angular_velocity = 0
-        self.car.tilt_angle = 0
 
         self.prev_distance = 0
         self.steps_since_progress = 0
 
         return self.get_state()
+
 
     def get_state(self) -> np.ndarray:
         sensor_readings = self.car.get_sensors(self.track_game)
@@ -92,12 +100,10 @@ class Environment:
         angle_rad = np.radians(self.car.angle)
         trig_values = np.array([np.sin(angle_rad), np.cos(angle_rad)])
 
-        state = np.concatenate([
+        return np.concatenate([
             sensor_readings,
             [self.car.speed / self.car.max_speed],
             trig_values]).astype(np.float32)
-
-        return state
 
     def is_on_track(self, x, y):
         track_points = np.array(self.smoothed_track)
@@ -128,32 +134,22 @@ class Environment:
                 reward += distance_reward * 20
                 self.steps_since_progress = 0
 
-                if 3 <= action <= 8:
+                if action in [1, 2]:
                     turn_efficiency = 1.0
                     speed_ratio = self.car.speed / self.car.max_speed
-                    if 0.2 <= speed_ratio <= 0.6:
+
+                    if 0.3 <= speed_ratio <= 0.7:
                         turn_efficiency *= 1.5
+
                     if abs(self.car.angular_velocity) > 0.1:
-                        if action in [3, 6]:
-                            turn_efficiency *= 1.2 if speed_ratio > 0.5 else 0.8
-                        elif action in [4, 7]:
-                            turn_efficiency *= 1.2 if 0.3 <= speed_ratio <= 0.5 else 0.8
-                        elif action in [5, 8]:
-                            turn_efficiency *= 1.2 if speed_ratio < 0.3 else 0.8
+                        turn_efficiency *= 1.2 if 0.3 <= speed_ratio <= 0.7 else 0.8
+
                     reward *= turn_efficiency
             else:
                 self.steps_since_progress += 1
                 reward -= 0.5
-\
-                if action in [3, 6]:
-                    reward += 0.1
 
-            if abs(self.car.angular_velocity) < 0.1:
-                reward += 0.5
-                if self.car.speed > 0.8 * self.car.max_speed:
-                    reward += 0.2
-
-            if action in [0, 1] and abs(self.car.angular_velocity) < 0.1:
+            if action in [0, 3] and abs(self.car.angular_velocity) < 0.1:
                 reward += self.car.speed * 0.05
 
             if self.steps_since_progress >= self.max_steps_without_progress:
@@ -181,13 +177,11 @@ class Environment:
         direction = next_point - start_point
 
         angle = np.arctan2(direction[1], direction[0])
-        angle_degrees = np.degrees(angle)
-
-        return angle_degrees
+        return np.degrees(angle)
 
     def render(self) -> None:
         self.screen.fill((100, 200, 100))
-        self.track_game.track_renderer.draw_track(self.screen, (128, 128, 128), 
+        self.track_game.track_renderer.draw_track(self.screen, (128, 128, 128),
                                                 self.smoothed_track, self.full_corners)
         self.car.draw(self.screen)
         pygame.display.flip()

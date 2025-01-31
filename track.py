@@ -1,4 +1,3 @@
-import argparse
 import math
 import random as rn
 import sys
@@ -12,7 +11,6 @@ from utils import Constants
 
 
 class TrackGeneration(Constants):
-
     def __init__(self):
         super().__init__()
         self.min_points = Constants.MIN_POINTS
@@ -122,14 +120,6 @@ class TrackGeneration(Constants):
                 closest_point = p
         return closest_point
 
-    # def get_checkpoints(self, track_points, n_checkpoints=self.n_checkpoints):
-    #     checkpoint_step = len(track_points) // n_checkpoints
-    #     checkpoints = []
-    #     for i in range(n_checkpoints):
-    #         index = i * checkpoint_step
-    #         checkpoints.append(track_points[index])
-    #     return checkpoints
-
     # ------------------------
     # Internal helper methods
     # ------------------------
@@ -141,7 +131,6 @@ class TrackGeneration(Constants):
 
 
     def push_points_apart(self, points, distance):
-        distance_sq = distance * distance
         for i in range(len(points)):
             for j in range(i + 1, len(points)):
                 p_dist = math.sqrt((points[i][0] - points[j][0]) ** 2 + (points[i][1] - points[j][1]) ** 2)
@@ -350,7 +339,7 @@ class RacetrackGame(Constants):
         pygame.init()
         self.screen = pygame.display.set_mode((Constants.WIDTH, Constants.HEIGHT), 
         pygame.DOUBLEBUF | pygame.HWSURFACE)
-        self.debug = debug
+        self.debug = True
         self.smoothed_track = []
         self.show_checkpoints = show_checkpoints
         self.track_generation = TrackGeneration()
@@ -394,10 +383,6 @@ class RacetrackGame(Constants):
             pygame.display.update()
 
     def raycast_collision(self, start: tuple, end: tuple) -> tuple | None:
-        """
-        Cast a ray from `start` to `end` and check for collisions with the track.
-        Returns the closest collision point or None if no collision.
-        """
         sx, sy = start
         ex, ey = end
 
@@ -441,30 +426,3 @@ class RacetrackGame(Constants):
                 return True
 
         return False
-
-
-def str2bool(v):
-    """
-    Helper method to parse strings into boolean values.
-    """
-    if isinstance(v, bool):
-       return v
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
-
-
-if __name__ == '__main__':
-    # rn.seed(rn.choice(COOL_TRACK_SEEDS)) # Optional seeding
-    parser = argparse.ArgumentParser(description="Procedural racetrack generator")
-    parser.add_argument("--debug", type=str2bool, nargs='?', const=True, default=False,
-                        help="Show racetrack generation steps")
-    parser.add_argument("--show-checkpoints", type=str2bool, nargs='?', const=True, default=False,
-                        help="Show checkpoints")
-    args = parser.parse_args()
-
-    game = RacetrackGame(debug=args.debug, show_checkpoints=args.show_checkpoints)
-    game.run()

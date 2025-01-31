@@ -19,6 +19,8 @@ class Car:
         self.steering = 0
 
         self.tilt_angle = 0
+        self.initial_tilt = 0
+        self.tilt_interpolation = 0.1
         self.max_tilt_angle = 15
         self.tilt_damping = 0.1
 
@@ -87,6 +89,8 @@ class Car:
         self.tilt_angle = -self.steering * min(abs(self.speed), self.max_speed) / self.max_speed * self.max_tilt_angle
 
         self.tilt_angle *= (1 - self.tilt_damping)
+        target_tilt = -self.steering * min(abs(self.speed), self.max_speed) / self.max_speed * self.max_tilt_angle
+        self.tilt_angle += (target_tilt - self.tilt_angle) * self.tilt_interpolation
 
         new_x = self.x + np.cos(np.radians(new_angle)) * self.speed
         new_y = self.y + np.sin(np.radians(new_angle)) * self.speed
@@ -106,12 +110,21 @@ class Car:
             return True
 
     def draw(self, screen) -> None:
-        rotated_surface = pygame.transform.rotate(self.surface, -self.angle)
+        diagonal = int(np.sqrt(self.CAR_LENGTH**2 + self.CAR_WIDTH**2))
 
-        tilt_surface = pygame.Surface((self.CAR_LENGTH, self.CAR_WIDTH), pygame.SRCALPHA)
-        tilt_surface.blit(rotated_surface, (0, 0))
+        base_surface = pygame.Surface((diagonal, diagonal), pygame.SRCALPHA)
 
-        final_surface = pygame.transform.rotate(tilt_surface, self.tilt_angle)
+        car_surface = pygame.Surface((self.CAR_LENGTH, self.CAR_WIDTH), pygame.SRCALPHA)
+        pygame.draw.rect(car_surface, (255, 0, 0), (0, 0, self.CAR_LENGTH, self.CAR_WIDTH))
+
+        base_rect = base_surface.get_rect()
+        car_rect = car_surface.get_rect()
+        base_surface.blit(car_surface,
+                        (base_rect.centerx - car_rect.width//2,
+                        base_rect.centery - car_rect.height//2))
+        rotated_surface = pygame.transform.rotate(base_surface, -self.angle)
+
+        final_surface = pygame.transform.rotate(rotated_surface, self.tilt_angle)
 
         rect = final_surface.get_rect(center=(self.x, self.y))
         screen.blit(final_surface, rect)
@@ -126,8 +139,8 @@ class Car:
                 end_x = self.x + np.cos(np.radians(sensor_angle)) * self.SENSOR_RANGE * reading
                 end_y = self.y + np.sin(np.radians(sensor_angle)) * self.SENSOR_RANGE * reading
                 pygame.draw.line(screen, (0, 255, 0, 255), (self.x, self.y), (end_x, end_y), 2)
-
                 pygame.draw.circle(screen, (255, 255, 0), (int(end_x), int(end_y)), 3)
+
 
     def get_sensors(self, track) -> np.ndarray:
             sensor_angles = np.linspace(-120, 120, self.NUM_SENSORS)
@@ -136,10 +149,9 @@ class Car:
                 sensor_x = self.x
                 sensor_y = self.y
 
-                end_x = self.x + np.cos(np.radians(sensor_angle)) * self.SENSOR_RANGE
-                end_y = self.y + np.sin(np.radians(sensor_angle)) * self.SENSOR_RANGE
+                end_x = sensor_x + np.cos(np.radians(sensor_angle)) * self.SENSOR_RANGE
+                end_y = sensor_y + np.sin(np.radians(sensor_angle)) * self.SENSOR_RANGE
 
-                # Check for collision along the ray
                 collision = track.raycast_collision((self.x, self.y), (end_x, end_y))
                 if collision:
                     distance = np.sqrt((collision[0] - self.x)**2 + (collision[1] - self.y)**2)
