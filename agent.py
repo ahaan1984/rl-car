@@ -11,9 +11,9 @@ class Network(nn.Module):
         super().__init__()
         self.fc1 = nn.Linear(input_size, 128)
         self.ln1 = nn.LayerNorm(128)
-        self.fc2 = nn.Linear(128, 64)
-        self.ln2 = nn.LayerNorm(64)
-        self.fc3 = nn.Linear(64, output_size)
+        self.fc2 = nn.Linear(128, 256)
+        self.ln2 = nn.LayerNorm(256)
+        self.fc3 = nn.Linear(256, 512)
         self.act = nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -94,7 +94,7 @@ class Agent(nn.Module):
 
         target_q_values = rewards + (1 - dones) * self.gamma * next_q_values.squeeze()
 
-        loss = nn.MSELoss()(current_q_values.squeeze(), target_q_values)
+        loss = nn.HuberLoss()(current_q_values.squeeze(), target_q_values)
         self.optimiser.zero_grad(set_to_none=True)
         loss.backward()
         self.optimiser.step()
@@ -114,13 +114,11 @@ class Agent(nn.Module):
             performance_ratio = current_avg_reward / (self.baseline_reward + 1e-10)
 
             if performance_ratio < 0.8:
-                self.epsilon = max(self.epsilon_max,
+                self.epsilon = min(self.epsilon_max,
                                  self.epsilon / self.epsilon_decay)
             else:
-                self.epsilon = min(self.epsilon_min,
+                self.epsilon = max(self.epsilon_min,
                                  self.epsilon * self.epsilon_decay)
-            self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
-
 
     def update_target_network(self):
             self.target_net.load_state_dict(self.policy_net.state_dict())

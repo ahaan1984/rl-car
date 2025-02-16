@@ -85,15 +85,17 @@ class TrackGeneration(Constants):
         mask = (self.min_kerb_angle <= angle_diffs) & (angle_diffs <= self.max_kerb_angle)
         return points_array[mask]
 
-    def smooth_track(self, track_points:np.ndarray) -> list:
+    def smooth_track(self, track_points: np.ndarray) -> list:
         x = np.array([p[0] for p in track_points])
         y = np.array([p[1] for p in track_points])
-        x = np.r_[x, x[0]]
-        y = np.r_[y, y[0]]
-
-        tck, _ = interpolate.splprep([x, y], s=0, per=True)
+        
+        avg_segment_length = np.mean(np.hypot(np.diff(x), np.diff(y)))
+        smoothing_factor = avg_segment_length * len(track_points) * 0.1
+        
+        tck, _ = interpolate.splprep([x, y], s=smoothing_factor, per=True)
         xi, yi = interpolate.splev(np.linspace(0, 1, self.spline_points), tck)
-        return [(int(xi[i]), int(yi[i])) for i in range(len(xi))]
+        return [(xi[i], yi[i]) for i in range(len(xi))]
+
 
     def get_full_corners(self, track_points, corners):
         corners_in_track = self.get_corners_from_kp(track_points, corners)
@@ -143,10 +145,10 @@ class TrackGeneration(Constants):
                     diff = distance - dl
                     dx *= diff
                     dy *= diff
-                    points[j][0] = int(points[j][0] + dx)
-                    points[j][1] = int(points[j][1] + dy)
-                    points[i][0] = int(points[i][0] - dx)
-                    points[i][1] = int(points[i][1] - dy)
+                    points[j][0] = float(points[j][0] + dx)
+                    points[j][1] = float(points[j][1] + dy)
+                    points[i][0] = float(points[i][0] - dx)
+                    points[i][1] = float(points[i][1] - dy)
         return points
 
     def fix_angles(self, points, max_angle):
@@ -171,8 +173,8 @@ class TrackGeneration(Constants):
             s = math.sin(diff)
             new_x = (nx * c - ny * s) * nl
             new_y = (nx * s + ny * c) * nl
-            points[next_point][0] = int(points[i][0] + new_x)
-            points[next_point][1] = int(points[i][1] + new_y)
+            points[next_point][0] = float(points[i][0] + new_x)
+            points[next_point][1] = float(points[i][1] + new_y)
         return points
 
     def _clamp_points(self, points):

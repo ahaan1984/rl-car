@@ -93,17 +93,30 @@ class Environment:
 
         return self.get_state()
 
-
     def get_state(self) -> np.ndarray:
         sensor_readings = self.car.get_sensors(self.track_game)
-
+        
+        distance_sensors = sensor_readings[:8]  # First 8 directional sensors
+        path_distance = sensor_readings[-2]     # Distance to nearest track point
+        speed_ratio = self.car.speed / self.car.max_speed
+        
+        # Create 3x3 spatial grid
+        sensor_grid = np.array([
+            [distance_sensors[0], distance_sensors[1], distance_sensors[2]],
+            [distance_sensors[3], speed_ratio,         distance_sensors[4]],
+            [distance_sensors[5], distance_sensors[6], distance_sensors[7]]
+        ])
+        
+        # Get orientation components
         angle_rad = np.radians(self.car.angle)
         trig_values = np.array([np.sin(angle_rad), np.cos(angle_rad)])
-
+        
         return np.concatenate([
-            sensor_readings,
-            [self.car.speed / self.car.max_speed],
-            trig_values]).astype(np.float32)
+            sensor_grid.flatten(),  # 9 elements (3x3 grid)
+            [path_distance],        # 1 element
+            trig_values             # 2 elements
+        ]).astype(np.float32)
+
 
     def is_on_track(self, x, y):
         track_points = np.array(self.smoothed_track)
@@ -147,13 +160,13 @@ class Environment:
                     reward *= turn_efficiency
             else:
                 self.steps_since_progress += 1
-                reward -= 0.5
+                reward -= 0.2
 
             if action in [0, 3] and abs(self.car.angular_velocity) < 0.1:
                 reward += self.car.speed * 0.05
 
             if self.steps_since_progress >= self.max_steps_without_progress:
-                reward -= 50
+                reward -= 20
                 done = True
 
             self.prev_distance = current_distance
@@ -162,6 +175,7 @@ class Environment:
         self.render()
 
         return new_state, reward, done
+
 
     def calculate_progress(self) -> float:
         min_distance = float("inf")
