@@ -42,8 +42,10 @@ class Car:
         self.acceleration_factor = 4
         self.show_sensors = False
 
-        self.surface = pygame.Surface((self.CAR_LENGTH, self.CAR_WIDTH), pygame.SRCALPHA)
-        pygame.draw.rect(self.surface, (255, 0, 0), (0, 0, self.CAR_LENGTH, self.CAR_WIDTH))
+        self.sprite = pygame.image.load('static/simple-car.png').convert_alpha()
+        self.sprite = pygame.transform.scale(self.sprite, 
+                                    (self.CAR_LENGTH, self.CAR_WIDTH))
+
 
     def move(self, environment):
         self.speed += self.acceleration * self.acceleration_factor
@@ -110,24 +112,11 @@ class Car:
             return True
 
     def draw(self, screen) -> None:
-        diagonal = int(np.sqrt(self.CAR_LENGTH**2 + self.CAR_WIDTH**2))
-
-        base_surface = pygame.Surface((diagonal, diagonal), pygame.SRCALPHA)
-
-        car_surface = pygame.Surface((self.CAR_LENGTH, self.CAR_WIDTH), pygame.SRCALPHA)
-        pygame.draw.rect(car_surface, (255, 0, 0), (0, 0, self.CAR_LENGTH, self.CAR_WIDTH))
-
-        base_rect = base_surface.get_rect()
-        car_rect = car_surface.get_rect()
-        base_surface.blit(car_surface,
-                        (base_rect.centerx - car_rect.width//2,
-                        base_rect.centery - car_rect.height//2))
-        rotated_surface = pygame.transform.rotate(base_surface, -self.angle)
-
-        final_surface = pygame.transform.rotate(rotated_surface, self.tilt_angle)
-
-        rect = final_surface.get_rect(center=(self.x, self.y))
-        screen.blit(final_surface, rect)
+    # Rotate sprite based on car angle and tilt
+        rotated = pygame.transform.rotate(self.sprite, -self.angle)
+        tilted = pygame.transform.rotate(rotated, self.tilt_angle)
+        rect = tilted.get_rect(center=(self.x, self.y))
+        screen.blit(tilted, rect)
 
         if self.show_sensors:
             for i, reading in enumerate(self.sensor_readings[:self.NUM_SENSORS]):
