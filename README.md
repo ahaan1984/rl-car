@@ -1,6 +1,6 @@
 # Autonomous Racing AI
 
-This project implements an autonomous car racing AI using deep reinforcement learning. The AI agent learns to navigate a procedurally generated racetrack using a spatially aware neural network.
+This project implements a simulation of autonomous car AI using deep reinforcement learning. The AI agent learns to navigate a procedurally generated racetrack using a spatially aware neural network.
 
 ## Features
 - Procedural track generation using convex hulls and splines
